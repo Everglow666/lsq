@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ホテル原価計算地図</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <style>
+      #closeButton {
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        cursor: pointer;
+        font-size: 30px;
+        color: #aaa;
+        font-weight: bold;
+        z-index: 1000;
+      }
+
+      #closeButton:hover {
+        color: #333;
+      }
+
+      #map {
+        height: 1200px;
+        width: 100%;
+      }
+      #inputForm {
+        display: none;
+        position: absolute;
+        padding: 20px;
+        z-index: 999;
+        width: 300px;
+        background: rgba(255, 255, 255, 0.9); /* 半透明白色背景 */
+        border-radius: 16px; /* 圆角边框 */
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* 外部阴影 */
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+
+      #inputForm p {
+        margin: 10px 0;
+        font-size: 16px;
+      }
+
+      #inputForm h3 {
+        margin-top: 15px;
+        font-size: 18px;
+      }
+
+      #inputForm label {
+        display: block;
+        margin: 10px 0 5px;
+      }
+
+      #inputForm input[type="number"] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.1); /* 内阴影 */
+        font-size: 14px;
+        background-color: #fdfdfd;
+        transition: box-shadow 0.3s;
+      }
+
+      #inputForm input[type="number"]:focus {
+        outline: none;
+        box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.15);
+      }
+
+      #inputForm input,
+      #inputForm select {
+        margin-bottom: 10px;
+        width: 100%;
+        padding: 8px;
+        border-radius: 8px;
+        font-size: 14px;
+        border: 1px solid #ccc;
+        background-color: #f9f9f9;
+      }
+
+      #inputForm button {
+        margin-top: 15px;
+        padding: 10px 16px;
+        font-size: 14px;
+        border: none;
+        border-radius: 10px;
+        background-color: #4caf50;
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* 外阴影 */
+        transition: background-color 0.3s, box-shadow 0.3s;
+      }
+
+      #inputForm button:hover {
+        background-color: #45a049;
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+      }
+
+      #closeButton {
+        position: absolute;
+        top: 10px;
+        right: 14px;
+        cursor: pointer;ii
+        font-size: 20px;
+        font-weight: bold;
+        color: #888;
+      }
+
+      #closeButton:hover {
+        color: #333;
+      }
+
+      #landPriceContainer,
+      #inputFields {
+        display: none;
+      }
+      #results {
+        margin-top: 20px;
+      }
+      /* 新增的路线容器样式 */
+      #routeContainer {
+        margin-top: 15px;
+        display: flex; /* 设置为弹性盒子容器 */
+        flex-wrap: wrap; /* 允许子元素换行 */
+      }
+      #routeContainer div {
+        padding: 8px 12px;
+        margin: 5px;
+        flex: 0 0 auto; /* 让宽度自适应内容 */
+        white-space: nowrap; /* 不换行 */
+        border-radius: 10px;
+        color: white;
+        /* font-weight: bold; */
+        font-size: 10px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="inputForm">
+      <p id="stationName"><b>📍 サイト/site：</b></p>
+      <p id="lineInfo"><b>🚇 線路/line：</b></p>
+      <div id="routeContainer"></div>
+      <button onclick="showInputFields()">選択</button>
+      <div id="inputFields">
+        <h3>ホテル関連データの入力</h3>
+
+        <label for="area">にゅうりょくめんせき：</label>
+        <input
+          type="number"
+          id="area"
+          placeholder="面積（平方メートル）"
+        /><br />
+
+        <div style="display: flex; gap: 20px">
+          <label>
+            <input
+              type="radio"
+              name="costOption"
+              value="direct"
+              id="directCost"
+              checked
+              onclick="toggleCostInputs()"
+            />
+            総コスト
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="costOption"
+              value="land"
+              id="landCost"
+              onclick="toggleCostInputs()"
+            />
+            土地購入価格 + コスト
+          </label>
+        </div>
+        <br />
+
+        <div id="totalCostContainer">
+          <label for="totalCost">総コスト：</label>
+          <input
+            type="number"
+            id="totalCost"
+            placeholder="総コスト (円)"
+          /><br />
+        </div>
+
+        <div id="landPriceContainer">
+          <label for="landPrice">土地購入価格：</label>
+          <input
+            type="number"
+            id="landPrice"
+            placeholder="土地購入価格 (円)"
+          /><br />
+        </div>
+
+        <button onclick="calculateHotelData()">計算＃ケイサン＃</button>
+      </div>
+      <span id="closeButton" onclick="closeForm()">×</span>
+      <div id="results"></div>
+    </div>
+
+    <script>
+      var map = L.map("map").setView([35.6528, 139.7672], 13);
+      // 替换为谷歌地图瓦片图层
+      L.tileLayer(
+        "http://www.google.cn/maps/vt?lyrs=m@189&gl=cn&x={x}&y={y}&z={z}",
+        {
+          attribution: "谷歌地图",
+          maxZoom: 20,
+        }
+      ).addTo(map);
+
+      const stations = [];
+      let hideTimeout = null;
+
+      fetch(
+        "https://japandata.oss-cn-shanghai.aliyuncs.com/alllines_nodes.geojson"
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          data.features.forEach((feature) => {
+            if (feature.geometry.type === "Point") {
+              const lat = feature.geometry.coordinates[1];
+              const lon = feature.geometry.coordinates[0];
+              const name = feature.properties.name;
+              const avgPrice = feature.properties.avgPrice;
+              const square = feature.properties.square;
+              const lines = [];
+              const marker = L.circle([lat, lon], {
+                radius: 30, 
+                color: "tomato",
+                weight: 2,
+                fillOpacity: 0.9,
+              }).addTo(map);
+              stations.push({
+                name,
+                lat,
+                lon,
+                marker,
+                lines,
+                avgPrice,
+                square,
+              });
+            }
+          });
+
+          data.features.forEach((feature) => {
+            if (feature.geometry.type.includes("LineString")) {
+              const lineName = feature.properties.name;
+              const lineCoords = feature.geometry.coordinates;
+              stations.forEach((station) => {
+                const stationCoord = [station.lon, station.lat];
+                if (
+                  lineCoords.some(
+                    (coord) => getDistance(coord, stationCoord) < 0.001
+                  )
+                ) {
+                  station.lines.push(lineName);
+                }
+              });
+            }
+          });
+
+          stations.forEach((station) => {
+            station.marker.on("click", (e) =>
+              showInputForm(station, e.originalEvent)
+            );
+            station.marker.on("mouseover", (e) => {
+              clearTimeout(hideTimeout);
+              showInputForm(station, e.originalEvent);
+            });
+            station.marker.on("mouseout", () => {
+              hideTimeout = setTimeout(closeForm, 3000);
+            });
+          });
+        });
+
+      function getDistance(coord1, coord2) {
+        const dx = coord1[0] - coord2[0];
+        const dy = coord1[1] - coord2[1];
+        return Math.sqrt(dx * dx + dy * dy);
+      }
+
+      function showInputForm(station, mouseEvent) {
+        const form = document.getElementById("inputForm");
+        const mapContainer = document.getElementById("map");
+        document.getElementById("area").value = "";
+        document.getElementById("landPrice").value = "";
+        document.getElementById("totalCost").value = "";
+
+        document.getElementById(
+          "stationName"
+        ).innerHTML = `<b>📍 サイト/site：</b>${station.name}`;
+        const uniqueLines = [...new Set(station.lines)];
+        const routeContainer = document.getElementById("routeContainer"); // 获取路线容器
+        routeContainer.innerHTML = "";
+
+        const colors = [
+          "#EF463C",
+          "#0072BC",
+          "#ABBA41",
+          "#CE1C64",
+          "#F9A328",
+          "#C7BEB3",
+          "#1BB267",
+          "#00AFEF",
+          "#8C7DBA",
+          "#AE6F4B",
+        ];
+
+        uniqueLines.forEach((line, index) => {
+          const routeDiv = document.createElement("div");
+          routeDiv.textContent = line;
+          routeDiv.style.backgroundColor = colors[index % colors.length];
+          routeContainer.appendChild(routeDiv);
+        });
+
+        form.dataset.stationName = station.name;
+        document.getElementById("inputFields").style.display = "none";
+        document.getElementById("results").innerHTML = "";
+        form.style.display = "block";
+
+        const mapRect = mapContainer.getBoundingClientRect();
+        const mouseX = mouseEvent.clientX - mapRect.left;
+        const mouseY = mouseEvent.clientY - mapRect.top;
+
+        const formWidth = form.offsetWidth;
+        const formHeight = form.offsetHeight;
+
+        let left = mouseX + 10;
+        let top = mouseY + 10;
+
+        if (left + formWidth > mapRect.width) left = mouseX - formWidth - 10;
+        if (top + formHeight > mapRect.height) top = mouseY - formHeight - 10;
+
+        form.style.left = `${left}px`;
+        form.style.top = `${top}px`;
+      }
+
+      function showInputFields() {
+        document.getElementById("inputFields").style.display = "block";
+      }
+
+      function closeForm() {
+        document.getElementById("inputForm").style.display = "none";
+        document.getElementById("results").innerHTML = "";
+        document.getElementById("inputFields").style.display = "none";
+      }
+
+      // 根据单选按钮选择显示不同的输入框
+      function toggleCostInputs() {
+        const option = document.querySelector(
+          'input[name="costOption"]:checked'
+        ).value;
+        document.getElementById("landPriceContainer").style.display =
+          option === "land" ? "block" : "none";
+        document.getElementById("totalCostContainer").style.display =
+          option === "direct" ? "block" : "none";
+      }
+
+      function calculateHotelData() {
+        const area = parseFloat(document.getElementById("area").value);
+        const landPrice = parseFloat(
+          document.getElementById("landPrice").value
+        );
+        const totalCostInput = parseFloat(
+          document.getElementById("totalCost").value
+        );
+        const costOption = document.querySelector(
+          'input[name="costOption"]:checked'
+        ).value;
+
+        if (
+          isNaN(area) ||
+          (costOption === "land" && isNaN(landPrice)) ||
+          (costOption === "direct" && isNaN(totalCostInput))
+        ) {
+          alert("完全な情報を入力してください");
+          return;
+        }
+
+        const stationName =
+          document.getElementById("inputForm").dataset.stationName;
+        const stationInfo = stations.find(
+          (station) => station.name === stationName
+        );
+        if (!stationInfo) {
+          alert("サイトデータがロードされていません");
+          return;
+        }
+
+        const square = stationInfo.square;
+        const avgPrice = stationInfo.avgPrice;
+        const rooms = (area * 0.9) / square;
+
+        let totalCost =
+          costOption === "direct" ? totalCostInput : landPrice + area * 250000;
+
+        const totalRevenue = rooms * avgPrice * 365 * 0.85;
+        const yieldRate = (totalRevenue / totalCost) * 100;
+        const paybackPeriod = 1 / (yieldRate / 100);
+
+        const resultsDiv = document.getElementById("results");
+        resultsDiv.innerHTML = `
+          <h4>計算結果：</h4>
+          <p><b>部屋数：</b>${rooms.toFixed(2)}</p>
+          <p><b>総売上高：</b>${totalRevenue.toFixed(2)} 円</p>
+          <p><b>収益率：</b>${yieldRate.toFixed(4)}%</p>
+          <p><b>回収期間：</b>${paybackPeriod.toFixed(4)} 年</p>
+        `;
+      }
+
+      document
+        .getElementById("inputForm")
+        .addEventListener("mouseenter", () => {
+          clearTimeout(hideTimeout);
+        });
+
+      document
+        .getElementById("inputForm")
+        .addEventListener("mouseleave", () => {
+          hideTimeout = setTimeout(closeForm, 3000);
+        });
+
+      window.onload = function () {
+        toggleCostInputs();
+      };
+    </script>
+  </body>
+</html>
